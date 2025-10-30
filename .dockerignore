@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+venv/
+env/
+ENV/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (garder README, mais exclure les autres)
+CONTRIBUTING.md
+*.draft.md
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs et cache
+*.log
+*.cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Fichiers temporaires
+*.tmp
+*.bak
+*.backup
+
+# Node modules (si présents)
+node_modules/
+
+# Données locales (exclure les données de test si volumineuses)
+# Garder sample_bug_events.csv mais exclure d'autres fichiers de données
+*.csv
+!sample_bug_events.csv
+
+# Exports
+exports/
+
+# Tests
+tests/__pycache__/
+.tox/
+
+# Docker
+docker-compose.override.yml
+
