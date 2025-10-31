@@ -11,7 +11,7 @@ import networkx as nx
 from datetime import datetime, timedelta
 
 
-def plot_process_map(dfg_data, width=1200, height=600):
+def plot_process_map(dfg_data, width=1200, height=600, animated=False):
     """
     Create an interactive process map using Plotly with duration labels.
     
@@ -131,26 +131,17 @@ def plot_process_map(dfg_data, width=1200, height=600):
     # Get node duration data
     nodes_data = dfg_data.get('nodes', {})
     
-    # Create node trace with better styling and durations
-    node_x = []
-    node_y = []
-    node_text = []
-    node_labels = []
-    node_colors = []
-    node_sizes = []
-    node_annotations = []
+    # Create figure with edges only first
+    fig = go.Figure(data=edge_traces)
     
+    # Add rectangular shapes for nodes using annotations
     for node in G.nodes():
         x, y = pos[node]
-        node_x.append(x)
-        node_y.append(y)
-        
-        # Get node duration data
         node_info = nodes_data.get(node, {'duration_hours': 0, 'color': 'blue', 'status': 'unknown'})
         duration_hours = node_info['duration_hours']
         node_color_key = node_info['color']
         
-        # Format node label with duration
+        # Format duration text
         if duration_hours < 1:
             duration_text = f"{duration_hours * 60:.0f}min"
         elif duration_hours < 24:
@@ -159,110 +150,300 @@ def plot_process_map(dfg_data, width=1200, height=600):
             days = duration_hours / 24
             duration_text = f"{days:.1f}d"
         
-        # Node label: Activity name
-        node_labels.append(node)
-        
-        # Calculate node statistics
+        # Calculate node statistics for hover text
         in_freq = sum([e['frequency'] for e in edges if e['to'] == node])
         out_freq = sum([e['frequency'] for e in edges if e['from'] == node])
         total_freq = in_freq + out_freq
         
-        # Node size based on frequency
-        max_total = max([
-            sum([e['frequency'] for e in edges if e['to'] == n or e['from'] == n])
-            for n in G.nodes()
-        ])
-        node_size = max(40, min(total_freq / max_total * 70, 90))
-        node_sizes.append(node_size)
-        
         # Node color: RED if > 24h, BLUE otherwise
         if node_color_key == 'red':
             color_hex = '#E74C3C'  # Rouge
+            border_color = '#C0392B'
         else:
             color_hex = '#3498DB'  # Bleu
-        node_colors.append(color_hex)
+            border_color = '#2980B9'
         
-        # Hover text
-        status_text = "⚠️ CRITICAL" if node_color_key == 'red' else "✅ Normal"
-        node_text.append(
-            f"<b>{node}</b><br>"
-            f"Avg Duration: <b>{duration_text}</b><br>"
-            f"Status: {status_text}<br>"
-            f"In: {in_freq} | Out: {out_freq}<br>"
-            f"Total: {total_freq}"
+        # Create rectangular annotation for the node
+        fig.add_annotation(
+            x=x,
+            y=y,
+            text=f"<b>{node}</b>",
+            showarrow=False,
+            font=dict(
+                size=11,
+                color='white',
+                family='Arial Black'
+            ),
+            bgcolor=color_hex,
+            bordercolor=border_color,
+            borderwidth=3,
+            borderpad=8,
+            opacity=0.95,
+            hovertext=(
+                f"<b>{node}</b><br>"
+                f"Avg Duration: <b>{duration_text}</b><br>"
+                f"Status: {'⚠️ CRITICAL' if node_color_key == 'red' else '✅ Normal'}<br>"
+                f"In: {in_freq} | Out: {out_freq}<br>"
+                f"Total: {total_freq}"
+            ),
+            hoverlabel=dict(
+                bgcolor='white',
+                font_size=12,
+                font_color='black'
+            )
         )
         
-        # Add duration annotation below node
+        # Add duration annotation below the rectangle
         if duration_hours > 0:
-            node_annotations.append(
-                dict(
-                    x=x,
-                    y=y - 0.08,  # Below the node
-                    text=f"<b>{duration_text}</b>",
-                    showarrow=False,
-                    font=dict(
-                        size=10,
-                        color=color_hex,
-                        family="Arial Black"
-                    ),
-                    bgcolor='white',
-                    bordercolor=color_hex,
-                    borderwidth=2,
-                    borderpad=3,
-                    opacity=0.95
-                )
+            fig.add_annotation(
+                x=x,
+                y=y - 0.12,  # Below the rectangle
+                text=f"<b>{duration_text}</b>",
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color=color_hex,
+                    family="Arial Black"
+                ),
+                bgcolor='white',
+                bordercolor=color_hex,
+                borderwidth=2,
+                borderpad=3,
+                opacity=0.95
             )
-    
-    node_trace = go.Scatter(
-        x=node_x,
-        y=node_y,
-        mode='markers+text',
-        text=node_labels,
-        textposition='middle center',
-        textfont=dict(
-            size=10,
-            color='black',
-            family='Arial Black'
-        ),
-        hoverinfo='text',
-        hovertext=node_text,
-        marker=dict(
-            size=node_sizes,
-            color=node_colors,
-            line=dict(width=3, color='white'),
-            opacity=0.9
-        ),
-        showlegend=False
-    )
-    
-    # Create figure
-    fig = go.Figure(data=edge_traces + [node_trace])
     
     # Add duration annotations for edges
     for annotation in edge_annotations:
         fig.add_annotation(annotation)
     
-    # Add duration annotations for nodes
-    for annotation in node_annotations:
-        fig.add_annotation(annotation)
-    
-    fig.update_layout(
-        title={
-            'text': "Process Map - Workflow with Duration",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18, 'color': '#2C3E50'}
-        },
-        showlegend=False,
-        hovermode='closest',
-        margin=dict(b=20, l=5, r=5, t=60),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor='#F8F9FA',
-        paper_bgcolor='white',
-        width=width,
-        height=height
-    )
+    # Add animated tokens if requested
+    if animated:
+        # Create animation frames with tokens moving along edges
+        frames = []
+        num_frames = 120  # Increased frames for smoother, slower animation
+        
+        # Define speed multipliers based on edge color (SLOWER overall)
+        speed_map = {
+            'green': 2.0,   # Fast (vert) - tokens move quickly (reduced from 3.0)
+            'orange': 0.7,  # Normal (orange) - normal speed (reduced from 1.0)
+            'red': 0.35     # Slow (rouge) - tokens move slowly (reduced from 0.5)
+        }
+        
+        # Token density: how many tokens per edge to show simultaneously
+        TOKENS_PER_EDGE = 8  # Number of tokens visible on each edge at once
+        
+        # Create token traces for each edge
+        token_traces = []
+        for edge_idx, edge in enumerate(edges):
+            x0, y0 = pos[edge['from']]
+            x1, y1 = pos[edge['to']]
+            edge_color = color_map.get(edge['color'], '#95A5A6')
+            speed = speed_map.get(edge['color'], 0.7)
+            
+            # Create multiple tokens per edge to show continuous flow
+            # Each token will follow the previous one with a spacing
+            num_tokens = TOKENS_PER_EDGE
+            
+            for token_idx in range(num_tokens):
+                # NO perpendicular offset - tokens must be exactly on the line
+                token_offset = 0.0
+                
+                # Calculate spacing between tokens (they should be evenly distributed)
+                # Each token starts at a different position along the line
+                token_spacing = 1.0 / num_tokens  # Spacing between tokens (0 to 1)
+                base_phase = token_idx * token_spacing  # Starting position (0 to 1)
+                
+                token_trace = go.Scatter(
+                    x=[],
+                    y=[],
+                    mode='markers',
+                    marker=dict(
+                        size=9,  # Slightly larger for better visibility
+                        color=edge_color,
+                        line=dict(width=1.5, color='white'),
+                        opacity=0.9
+                    ),
+                    name=f"Token {edge_idx}-{token_idx}",
+                    showlegend=False,
+                    hoverinfo='skip'
+                )
+                token_traces.append({
+                    'trace': token_trace,
+                    'x0': x0,
+                    'y0': y0,
+                    'x1': x1,
+                    'y1': y1,
+                    'speed': speed,
+                    'offset': token_offset,
+                    'color': edge_color,
+                    'edge_idx': edge_idx,
+                    'base_phase': base_phase  # Starting position along the edge
+                })
+        
+        # Create frames for animation
+        for frame_num in range(num_frames):
+            frame_data = list(edge_traces)  # Start with static edges
+            
+            # Calculate token positions for this frame
+            for token_info in token_traces:
+                # Calculate progress along edge (0 to 1)
+                # Speed affects how fast tokens progress through frames
+                # SLOWER: use more frames per cycle
+                # The speed multiplier affects how quickly tokens move
+                base_cycle_length = 100  # Base cycle length (frames for one complete journey)
+                cycle_length = max(30, int(base_cycle_length / token_info['speed']))  # Slower tokens have longer cycles
+                
+                # Calculate the current position of this token
+                # Tokens move continuously along the edge, wrapping around
+                # base_phase gives the starting offset, then we add movement
+                # Speed determines how fast each token progresses
+                movement_speed = token_info['speed'] / base_cycle_length  # Speed-dependent movement per frame
+                total_progress = (token_info['base_phase'] + frame_num * movement_speed) % 1.0
+                
+                # Calculate position along edge - EXACTLY on the line
+                x_pos = token_info['x0'] + (token_info['x1'] - token_info['x0']) * total_progress
+                y_pos = token_info['y0'] + (token_info['y1'] - token_info['y0']) * total_progress
+                
+                # NO perpendicular offset - tokens must stay exactly on the line
+                # All tokens move on the same line path
+                
+                # Always show token (it wraps around)
+                token_trace = go.Scatter(
+                    x=[x_pos],
+                    y=[y_pos],
+                    mode='markers',
+                    marker=dict(
+                        size=9,  # Slightly larger for better visibility
+                        color=token_info['color'],
+                        line=dict(width=1.5, color='white'),
+                        opacity=0.9
+                    ),
+                    showlegend=False,
+                    hoverinfo='skip'
+                )
+                frame_data.append(token_trace)
+            
+            frames.append(go.Frame(data=frame_data, name=str(frame_num)))
+        
+        # Add initial token positions (distributed along edges)
+        for token_info in token_traces:
+            # Calculate initial position based on base_phase - EXACTLY on the line
+            x_init = token_info['x0'] + (token_info['x1'] - token_info['x0']) * token_info['base_phase']
+            y_init = token_info['y0'] + (token_info['y1'] - token_info['y0']) * token_info['base_phase']
+            
+            # NO perpendicular offset - tokens must be exactly on the line
+            
+            token_trace = go.Scatter(
+                x=[x_init],
+                y=[y_init],
+                mode='markers',
+                marker=dict(
+                    size=9,  # Slightly larger for better visibility
+                    color=token_info['color'],
+                    line=dict(width=1.5, color='white'),
+                    opacity=0.9
+                ),
+                showlegend=False,
+                hoverinfo='skip'
+            )
+            fig.add_trace(token_trace)
+        
+        # Update layout with animation controls
+        fig.update_layout(
+            title={
+                'text': "Process Map - Workflow with Animated Tokens",
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': {'size': 18, 'color': '#2C3E50'}
+            },
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=60),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor='#F8F9FA',
+            paper_bgcolor='white',
+            width=width,
+            height=height,
+            updatemenus=[{
+                'type': 'buttons',
+                'showactive': False,
+                'buttons': [
+                    {
+                        'label': '▶️ Play',
+                        'method': 'animate',
+                        'args': [None, {
+                            'frame': {'duration': 80, 'redraw': True},  # Slower frame duration
+                            'fromcurrent': True,
+                            'transition': {'duration': 0}
+                        }]
+                    },
+                    {
+                        'label': '⏸️ Pause',
+                        'method': 'animate',
+                        'args': [[None], {
+                            'frame': {'duration': 0, 'redraw': False},
+                            'mode': 'immediate',
+                            'transition': {'duration': 0}
+                        }]
+                    }
+                ],
+                'x': 0.0,
+                'y': 0.0,
+                'xanchor': 'left',
+                'yanchor': 'bottom',
+                'pad': {'t': 50, 'r': 10}
+            }],
+            sliders=[{
+                'active': 0,
+                'yanchor': 'top',
+                'xanchor': 'left',
+                'currentvalue': {
+                    'font': {'size': 14},
+                    'prefix': 'Frame:',
+                    'visible': True,
+                    'xanchor': 'right'
+                },
+                'transition': {'duration': 0},
+                'pad': {'b': 10, 't': 50},
+                'len': 0.9,
+                'x': 0.1,
+                'y': 0,
+                'steps': [
+                    {
+                        'args': [[f.name], {
+                            'frame': {'duration': 0, 'redraw': True},
+                            'mode': 'immediate',
+                            'transition': {'duration': 0}
+                        }],
+                        'label': str(i),
+                        'method': 'animate'
+                    }
+                    for i, f in enumerate(frames)
+                ]
+            }]
+        )
+        
+        fig.frames = frames
+    else:
+        # No animation - standard layout
+        fig.update_layout(
+            title={
+                'text': "Process Map - Workflow with Duration",
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': {'size': 18, 'color': '#2C3E50'}
+            },
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=60),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor='#F8F9FA',
+            paper_bgcolor='white',
+            width=width,
+            height=height
+        )
     
     return fig
 

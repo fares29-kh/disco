@@ -399,10 +399,18 @@ else:
         st.header("Process Map Visualization")
         st.markdown("Interactive process flow diagram with color-coded performance indicators")
         
+        # Option to enable animation
+        col_anim1, col_anim2 = st.columns([1, 4])
+        with col_anim1:
+            enable_animation = st.checkbox("🎬 Activer l'animation", value=False, help="Affiche des cercles animés qui se déplacent le long des lignes. La vitesse dépend de la couleur : vert (rapide), orange (normal), rouge (lent).")
+        with col_anim2:
+            if enable_animation:
+                st.info("💡 L'animation affiche des tokens colorés qui se déplacent le long des transitions. Cliquez sur '▶️ Play' après la génération pour démarrer l'animation.")
+        
         try:
             with st.spinner("Generating process map..."):
                 dfg_data = compute_dfg_with_colors(df_filtered, sla_threshold)
-                fig_process = plot_process_map(dfg_data)
+                fig_process = plot_process_map(dfg_data, animated=enable_animation)
                 st.plotly_chart(fig_process, use_container_width=True)
             
             # Legend with better explanations
@@ -435,7 +443,7 @@ else:
             # Additional explanations
             with st.expander("💡 Comment lire le Process Map"):
                 st.markdown("""
-                **Nœuds (cercles)** :
+                **Nœuds (rectangles)** :
                 - Représentent les activités/tâches du processus
                 - **Couleur** :
                   - 🔵 **Bleu** : Temps moyen ≤ 24h (normal)
@@ -459,6 +467,15 @@ else:
                 1. **Nœuds rouges** : Activités qui prennent > 24h en moyenne
                 2. **Arcs rouges** : Transitions qui dépassent le SLA
                 3. **Arcs épais + rouges** : Haute fréquence ET lenteur = goulot critique
+                
+                **Animation (si activée)** :
+                - 🎬 **Tokens animés** : Des cercles colorés se déplacent le long des transitions
+                - **Vitesse** : Dépend de la couleur de l'arc
+                  - 🟢 **Vert** : Tokens rapides (transition performante)
+                  - 🟠 **Orange** : Vitesse normale
+                  - 🔴 **Rouge** : Tokens lents (goulot d'étranglement)
+                - **Utilisation** : Cliquez sur "▶️ Play" après avoir activé l'animation
+                - **Objectif** : Visualiser le flux réel et identifier visuellement les ralentissements
                 
                 **Actions recommandées** :
                 - 🔴 **Nœuds/Arcs rouges** : Priorité maximale, action immédiate
@@ -642,115 +659,223 @@ else:
         )
         
         # Sub-tabs for different AI features
-        ai_tab1, ai_tab2, ai_tab3 = st.tabs([
+        ai_tab1, ai_tab2, ai_tab3, ai_tab4, ai_tab5 = st.tabs([
             "📊 Model Training & Evaluation",
-            "🔮 Predict New Bug",
-            "📈 Batch Predictions"
+            "🔮 Predict New Bug Instance",
+            "📈 Batch Predictions",
+            "🏆 Category Prioritization",
+            "📉 Overall Process Performance"
         ])
         
         with ai_tab1:
-            st.subheader("Train ML Model on Historical Data")
+            # Header section with better styling
+            st.markdown("### 🎓 Train ML Model on Historical Data")
+            st.markdown("---")
             
             # Check if enough data
             if df_filtered['case_id'].nunique() < 10:
-                st.warning("⚠️ Need at least 10 completed bugs to train a model. Current: " + 
-                          str(df_filtered['case_id'].nunique()))
+                st.warning(f"⚠️ **Insufficient Data**: Need at least 10 completed bugs to train a model. Current: {df_filtered['case_id'].nunique()} cases")
             else:
-                # Model selection
-                col1, col2 = st.columns([2, 1])
+                # Model selection section with better layout
+                st.markdown("#### 📋 Configuration")
+                
+                col1, col2, col3 = st.columns([3, 2, 2])
                 
                 with col1:
                     model_type = st.selectbox(
-                        "Select Model Type",
+                        "**Select Model Type**",
                         options=['random_forest', 'gradient_boosting', 'linear'],
                         format_func=lambda x: {
                             'random_forest': '🌲 Random Forest (Recommended)',
                             'gradient_boosting': '🚀 Gradient Boosting',
                             'linear': '📏 Linear Regression'
-                        }[x]
+                        }[x],
+                        help="Choose the machine learning algorithm to use"
                     )
                 
                 with col2:
-                    if st.button("🎯 Train Model", type="primary"):
-                        with st.spinner("Training ML model..."):
-                            try:
-                                # Train model
-                                predictor = BugDurationPredictor(model_type=model_type)
-                                metrics = predictor.train(df_filtered)
-                                
-                                # Store in session state
-                                st.session_state.predictor = predictor
-                                st.session_state.model_trained = True
-                                
-                                st.success("✅ Model trained successfully!")
-                                
-                                # Display metrics
-                                st.subheader("📊 Model Performance")
-                                
-                                metric_col1, metric_col2, metric_col3 = st.columns(3)
-                                
-                                with metric_col1:
-                                    st.metric(
-                                        "Test MAE",
-                                        f"{metrics['test_mae']:.2f}h",
-                                        help="Mean Absolute Error on test set"
-                                    )
-                                
-                                with metric_col2:
-                                    st.metric(
-                                        "Test RMSE",
-                                        f"{metrics['test_rmse']:.2f}h",
-                                        help="Root Mean Squared Error on test set"
-                                    )
-                                
-                                with metric_col3:
-                                    st.metric(
-                                        "R² Score",
-                                        f"{metrics['test_r2']:.3f}",
-                                        help="Coefficient of determination (1.0 = perfect)"
-                                    )
-                                
-                                # Show feature importance for tree-based models
-                                if predictor.feature_importance is not None:
-                                    st.subheader("🎯 Feature Importance")
-                                    
-                                    import plotly.express as px
-                                    fig_importance = px.bar(
-                                        predictor.feature_importance.head(10),
-                                        x='importance',
-                                        y='feature',
-                                        orientation='h',
-                                        title='Top 10 Most Important Features',
-                                        labels={'importance': 'Importance', 'feature': 'Feature'}
-                                    )
-                                    st.plotly_chart(fig_importance, use_container_width=True)
-                                
-                            except Exception as e:
-                                st.error(f"Error training model: {str(e)}")
-                                import traceback
-                                with st.expander("Show detailed error"):
-                                    st.code(traceback.format_exc())
+                    st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+                    train_button = st.button("🎯 Train Model", type="primary", use_container_width=True)
                 
-                # Show model comparison
-                st.divider()
-                st.subheader("🏆 Model Comparison")
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+                    data_info = st.info(f"📊 **{df_filtered['case_id'].nunique()}** cases available", icon="ℹ️")
                 
-                if st.button("Compare All Models"):
-                    with st.spinner("Comparing models..."):
+                if train_button:
+                    with st.spinner("🔄 Training ML model... This may take a few moments."):
+                        try:
+                            # Train model
+                            predictor = BugDurationPredictor(model_type=model_type)
+                            metrics = predictor.train(df_filtered)
+                            
+                            # Store in session state
+                            st.session_state.predictor = predictor
+                            st.session_state.model_trained = True
+                            
+                            st.success("✅ **Model trained successfully!**")
+                            
+                            st.markdown("---")
+                            
+                            # Display metrics with better styling
+                            st.markdown("#### 📊 Model Performance Metrics")
+                            
+                            metric_col1, metric_col2, metric_col3 = st.columns(3)
+                            
+                            with metric_col1:
+                                st.metric(
+                                    "📉 Test MAE",
+                                    f"{metrics['test_mae']:.2f}h",
+                                    help="Mean Absolute Error on test set - Lower is better",
+                                    delta=f"±{metrics['test_mae']:.1f}h average error"
+                                )
+                            
+                            with metric_col2:
+                                st.metric(
+                                    "📊 Test RMSE",
+                                    f"{metrics['test_rmse']:.2f}h",
+                                    help="Root Mean Squared Error on test set - Lower is better",
+                                    delta=f"{metrics['test_rmse']:.1f}h std deviation"
+                                )
+                            
+                            with metric_col3:
+                                # Color code R² score
+                                r2_score = metrics['test_r2']
+                                if r2_score >= 0.8:
+                                    delta_color = "normal"
+                                    delta_text = "Excellent"
+                                elif r2_score >= 0.6:
+                                    delta_color = "normal"
+                                    delta_text = "Good"
+                                elif r2_score >= 0.4:
+                                    delta_color = "off"
+                                    delta_text = "Moderate"
+                                else:
+                                    delta_color = "inverse"
+                                    delta_text = "Needs Improvement"
+                                
+                                st.metric(
+                                    "🎯 R² Score",
+                                    f"{r2_score:.3f}",
+                                    delta=delta_text,
+                                    delta_color=delta_color,
+                                    help="Coefficient of determination (1.0 = perfect prediction)"
+                                )
+                            
+                            # Performance interpretation
+                            st.markdown("---")
+                            if r2_score >= 0.8:
+                                st.success(f"🎉 **Excellent Model Performance!** Your model explains {r2_score*100:.1f}% of the variance in bug resolution times.")
+                            elif r2_score >= 0.6:
+                                st.info(f"✅ **Good Model Performance.** Your model explains {r2_score*100:.1f}% of the variance. Consider adding more features for better accuracy.")
+                            else:
+                                st.warning(f"⚠️ **Model Performance Needs Improvement.** R² score of {r2_score:.3f} suggests the model may need more training data or feature engineering.")
+                            
+                            # Show feature importance for tree-based models
+                            if predictor.feature_importance is not None:
+                                st.markdown("---")
+                                st.markdown("#### 🎯 Feature Importance Analysis")
+                                st.markdown("*Understanding which features are most influential in predicting bug resolution time*")
+                                
+                                import plotly.express as px
+                                
+                                # Prepare data for visualization
+                                importance_df = predictor.feature_importance.head(10).copy()
+                                importance_df = importance_df.sort_values('importance', ascending=True)
+                                
+                                # Create better styled chart
+                                fig_importance = px.bar(
+                                    importance_df,
+                                    x='importance',
+                                    y='feature',
+                                    orientation='h',
+                                    title='<b>Top 10 Most Important Features</b>',
+                                    labels={
+                                        'importance': '<b>Importance Score</b>',
+                                        'feature': '<b>Feature</b>'
+                                    },
+                                    color='importance',
+                                    color_continuous_scale='Blues',
+                                    text='importance'
+                                )
+                                
+                                fig_importance.update_traces(
+                                    texttemplate='%{text:.3f}',
+                                    textposition='outside',
+                                    marker=dict(line=dict(color='white', width=1))
+                                )
+                                
+                                fig_importance.update_layout(
+                                    height=500,
+                                    showlegend=False,
+                                    plot_bgcolor='rgba(0,0,0,0)',
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    title_font_size=18,
+                                    title_x=0.5,
+                                    xaxis_title_font_size=14,
+                                    yaxis_title_font_size=14,
+                                    margin=dict(l=150, r=50, t=80, b=50)
+                                )
+                                
+                                st.plotly_chart(fig_importance, use_container_width=True)
+                                
+                                # Feature importance table
+                                with st.expander("📋 View All Feature Importances"):
+                                    display_importance = predictor.feature_importance.copy()
+                                    display_importance['importance'] = display_importance['importance'].round(4)
+                                    display_importance = display_importance.rename(columns={
+                                        'feature': 'Feature',
+                                        'importance': 'Importance Score'
+                                    })
+                                    st.dataframe(display_importance, use_container_width=True, hide_index=True)
+                            
+                            st.markdown("---")
+                            
+                        except Exception as e:
+                            st.error(f"❌ **Error training model**: {str(e)}")
+                            import traceback
+                            with st.expander("🔍 Show detailed error trace"):
+                                st.code(traceback.format_exc())
+                
+                # Model comparison section
+                st.markdown("---")
+                st.markdown("#### 🏆 Model Comparison")
+                st.markdown("*Compare different ML algorithms to find the best performing model*")
+                
+                if st.button("🔄 Compare All Models", type="secondary", use_container_width=False):
+                    with st.spinner("🔄 Comparing all models... This may take a minute."):
                         try:
                             comparison = compare_models(df_filtered)
-                            st.dataframe(
-                                comparison.style.highlight_min(
-                                    subset=['test_mae', 'test_rmse'], 
-                                    color='lightgreen'
-                                ).highlight_max(
-                                    subset=['test_r2'], 
-                                    color='lightgreen'
-                                ),
-                                use_container_width=True
+                            
+                            # Style the comparison table
+                            styled_comparison = comparison.style.format({
+                                'test_mae': '{:.2f}',
+                                'test_rmse': '{:.2f}',
+                                'test_r2': '{:.3f}',
+                                'train_mae': '{:.2f}',
+                                'train_r2': '{:.3f}'
+                            }).highlight_min(
+                                subset=['test_mae', 'test_rmse'], 
+                                color='#90EE90',
+                                axis=0
+                            ).highlight_max(
+                                subset=['test_r2'], 
+                                color='#90EE90',
+                                axis=0
                             )
+                            
+                            st.dataframe(styled_comparison, use_container_width=True, hide_index=True)
+                            
+                            # Find best model
+                            best_model_idx = comparison['test_r2'].idxmax()
+                            best_model = comparison.loc[best_model_idx]
+                            
+                            st.success(f"🏆 **Best Model**: {best_model['model'].replace('_', ' ').title()} with R² = {best_model['test_r2']:.3f}")
+                            
                         except Exception as e:
-                            st.error(f"Error comparing models: {str(e)}")
+                            st.error(f"❌ **Error comparing models**: {str(e)}")
+                            import traceback
+                            with st.expander("🔍 Show detailed error"):
+                                st.code(traceback.format_exc())
         
         with ai_tab2:
             st.subheader("🔮 Predict Duration for New Bug")
@@ -831,13 +956,33 @@ else:
                                 predicted_hours, hist_avg, hist_std
                             )
                             
+                            # Calculate process deviation
+                            from utils.feature_engineering import calculate_process_deviation
+                            
+                            # Get similar bugs for deviation calculation
+                            similar_bugs_df = df_filtered[
+                                (df_filtered['category'] == category_input) &
+                                (df_filtered['priority'] == priority_input)
+                            ]
+                            
+                            if similar_bugs_df.empty:
+                                similar_bugs_df = df_filtered[df_filtered['category'] == category_input]
+                            
+                            if similar_bugs_df.empty:
+                                similar_bugs_df = df_filtered
+                            
+                            deviation = calculate_process_deviation(
+                                df_filtered, 
+                                category=category_input if not similar_bugs_df.empty else None
+                            )
+                            
                             # Display results
                             st.success("✅ Prediction completed!")
                             
                             st.divider()
                             
                             # Big metrics
-                            result_col1, result_col2, result_col3 = st.columns(3)
+                            result_col1, result_col2, result_col3, result_col4 = st.columns(4)
                             
                             with result_col1:
                                 st.metric(
@@ -871,16 +1016,44 @@ else:
                                     help="Higher score = more complex than average"
                                 )
                             
+                            with result_col4:
+                                # Process deviation indicator
+                                deviation_level = deviation.get('deviation_level', 'Normal')
+                                deviation_colors = {
+                                    'Normal': '🟢',
+                                    'Moderate': '🟡',
+                                    'High': '🟠',
+                                    'Critical': '🔴'
+                                }
+                                st.metric(
+                                    "🔄 Process Deviation",
+                                    f"{deviation_colors.get(deviation_level, '⚪')} {deviation_level}",
+                                    help="How much this case type deviates from standard process"
+                                )
+                                st.caption(f"Score: {deviation.get('deviation_score', 0):.0f}/100")
+                            
                             # Additional insights
                             st.divider()
                             st.subheader("💡 Insights")
                             
-                            if len(similar_bugs) > 0:
-                                st.info(
-                                    f"📊 Based on {len(similar_bugs)} similar bugs "
-                                    f"({category_input} + {priority_input}), "
-                                    f"average duration is {hist_avg:.1f}h"
-                                )
+                            col_insight1, col_insight2 = st.columns(2)
+                            
+                            with col_insight1:
+                                if len(similar_bugs) > 0:
+                                    st.info(
+                                        f"📊 Based on {len(similar_bugs)} similar bugs "
+                                        f"({category_input} + {priority_input}), "
+                                        f"average duration is {hist_avg:.1f}h"
+                                    )
+                            
+                            with col_insight2:
+                                if deviation.get('deviation_score', 0) > 30:
+                                    st.warning(
+                                        f"🔄 **Process Deviation Detected** ({deviation.get('deviation_level', 'Normal')}):\n"
+                                        + "\n".join([f"- {factor}" for factor in deviation.get('factors', [])])
+                                    )
+                                else:
+                                    st.success("✅ Normal process flow expected")
                             
                             if predicted_hours > sla_threshold:
                                 st.warning(
@@ -932,6 +1105,271 @@ else:
             - Export results with risk classifications
             - Prioritization recommendations
             """)
+        
+        with ai_tab4:
+            st.subheader("🏆 AI-Based Bug Category Prioritization")
+            st.markdown("Prioritize bug categories based on their impact on process efficiency using AI analysis.")
+            
+            if 'category' not in df_filtered.columns:
+                st.warning("⚠️ No 'category' column found in the data. Category prioritization requires category information.")
+            else:
+                # Get predictor if available
+                predictor = None
+                if 'model_trained' in st.session_state and st.session_state.model_trained:
+                    predictor = st.session_state.get('predictor', None)
+                
+                if st.button("🎯 Analyze & Prioritize Categories", type="primary"):
+                    with st.spinner("Analyzing categories and calculating priority scores..."):
+                        try:
+                            from utils.category_prioritization import prioritize_categories
+                            
+                            priority_df = prioritize_categories(
+                                df_filtered, 
+                                sla_threshold=sla_threshold,
+                                predictor=predictor
+                            )
+                            
+                            if not priority_df.empty:
+                                st.success(f"✅ Analyzed {len(priority_df)} categories!")
+                                
+                                # Display ranking table
+                                st.subheader("📊 Category Priority Ranking")
+                                
+                                # Format columns for display
+                                display_df = priority_df.copy()
+                                # Remove "All Bugs" category if present
+                                display_df = display_df[display_df['category'] != 'All Bugs'].copy()
+                                display_df['priority_score'] = display_df['priority_score'].round(1)
+                                display_df['predicted_resolution_time'] = display_df['predicted_resolution_time'].round(1)
+                                display_df['predicted_delay_risk'] = display_df['predicted_delay_risk'].round(1)
+                                display_df['deviation_score'] = display_df['deviation_score'].round(1)
+                                
+                                # Color code by priority score
+                                def highlight_priority(row):
+                                    if row['priority_score'] >= 70:
+                                        return ['background-color: #ffcccc'] * len(row)
+                                    elif row['priority_score'] >= 40:
+                                        return ['background-color: #fff4cc'] * len(row)
+                                    else:
+                                        return ['background-color: #ccffcc'] * len(row)
+                                
+                                st.dataframe(
+                                    display_df.style.apply(highlight_priority, axis=1),
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                                
+                                # Visualization
+                                st.subheader("📈 Priority Score Visualization")
+                                
+                                import plotly.express as px
+                                # Filter out "All Bugs" for visualization
+                                viz_df = priority_df[priority_df['category'] != 'All Bugs'].copy()
+                                fig_priority = px.bar(
+                                    viz_df.head(10),
+                                    x='priority_score',
+                                    y='category',
+                                    orientation='h',
+                                    title='Top 10 Categories by Priority Score',
+                                    color='priority_score',
+                                    color_continuous_scale='RdYlGn_r',
+                                    labels={'priority_score': 'Priority Score (0-100)', 'category': 'Category'}
+                                )
+                                fig_priority.update_layout(height=400)
+                                st.plotly_chart(fig_priority, use_container_width=True)
+                                
+                                # Detailed metrics per category
+                                st.subheader("📋 Detailed Metrics")
+                                
+                                # Filter out "All Bugs" for detailed metrics
+                                filtered_priority_df = priority_df[priority_df['category'] != 'All Bugs'].copy()
+                                for idx, row in filtered_priority_df.iterrows():
+                                    with st.expander(f"🏷️ {row['category']} - Score: {row['priority_score']:.1f}"):
+                                        col1, col2, col3 = st.columns(3)
+                                        
+                                        with col1:
+                                            st.metric("Predicted Resolution Time", f"{row['predicted_resolution_time']:.1f}h")
+                                            st.metric("Average Duration", f"{row['avg_duration']:.1f}h")
+                                        
+                                        with col2:
+                                            st.metric("Delay Risk", f"{row['predicted_delay_risk']:.1f}%")
+                                            st.metric("Instance Count", int(row['instance_count']))
+                                        
+                                        with col3:
+                                            st.metric("Deviation Score", f"{row['deviation_score']:.1f}/100")
+                                            st.metric("Suggested Action", row['suggested_action'])
+                                        
+                                        st.info(f"💡 **Recommendation**: {row['suggested_action']}")
+                                        
+                                        if row['predicted_delay_risk'] > 50:
+                                            st.warning("⚠️ High delay risk - many instances exceed SLA threshold")
+                                        if row['deviation_score'] > 50:
+                                            st.warning("⚠️ High process deviation - cases deviate significantly from standard process")
+                            else:
+                                st.warning("No category data available for prioritization")
+                                
+                        except Exception as e:
+                            st.error(f"Error analyzing categories: {str(e)}")
+                            import traceback
+                            with st.expander("Show detailed error"):
+                                st.code(traceback.format_exc())
+        
+        with ai_tab5:
+            st.subheader("📉 Predictive Analysis for Overall Process Performance")
+            st.markdown("Analyze the overall impact of bug categories on process performance and identify critical activities.")
+            
+            if st.button("🔍 Analyze Overall Performance", type="primary"):
+                with st.spinner("Analyzing overall process performance..."):
+                    try:
+                        from utils.category_prioritization import analyze_overall_process_performance
+                        
+                        performance_data = analyze_overall_process_performance(
+                            df_filtered,
+                            sla_threshold=sla_threshold
+                        )
+                        
+                        if performance_data:
+                            st.success("✅ Analysis completed!")
+                            
+                            # Overall KPIs
+                            st.subheader("📊 Overall Process KPIs")
+                            
+                            kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+                            
+                            with kpi_col1:
+                                st.metric(
+                                    "Average Resolution Time",
+                                    f"{performance_data['overall_avg_duration']:.1f}h"
+                                )
+                            
+                            with kpi_col2:
+                                st.metric(
+                                    "SLA Breach Rate",
+                                    f"{performance_data['sla_breach_rate']:.1f}%",
+                                    delta=f"-{performance_data['sla_breach_count']} cases"
+                                )
+                            
+                            with kpi_col3:
+                                st.metric(
+                                    "Average Reassignments",
+                                    f"{performance_data['avg_reassignments']:.1f}",
+                                    help="Average number of different activities per case"
+                                )
+                            
+                            with kpi_col4:
+                                st.metric(
+                                    "Rework Rate",
+                                    f"{performance_data['rework_rate']:.1f}%",
+                                    help="Percentage of cases that were reopened"
+                                )
+                            
+                            # Category Impact Analysis
+                            if not performance_data['category_impacts'].empty:
+                                st.subheader("🎯 Category Impact on Overall Process")
+                                
+                                category_impacts = performance_data['category_impacts']
+                                
+                                # Impact visualization
+                                import plotly.express as px
+                                
+                                fig_impact = px.bar(
+                                    category_impacts,
+                                    x='total_impact_hours',
+                                    y='category',
+                                    orientation='h',
+                                    title='Total Impact by Category (Hours × Instances)',
+                                    color='sla_breach_rate',
+                                    color_continuous_scale='RdYlGn_r',
+                                    labels={
+                                        'total_impact_hours': 'Total Impact (hours)',
+                                        'category': 'Category',
+                                        'sla_breach_rate': 'SLA Breach Rate (%)'
+                                    }
+                                )
+                                fig_impact.update_layout(height=400)
+                                st.plotly_chart(fig_impact, use_container_width=True)
+                                
+                                # Category impact table
+                                st.subheader("📋 Category Impact Details")
+                                
+                                display_impacts = category_impacts.copy()
+                                display_impacts = display_impacts.round({
+                                    'avg_duration': 1,
+                                    'total_impact_hours': 1,
+                                    'impact_percentage': 2,
+                                    'sla_breach_rate': 1
+                                })
+                                
+                                st.dataframe(
+                                    display_impacts,
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            
+                            # Critical Activities
+                            if not performance_data['critical_activities'].empty:
+                                st.subheader("🔴 Most Critical Activities (Slowest)")
+                                
+                                critical_acts = performance_data['critical_activities']
+                                
+                                fig_critical = px.bar(
+                                    critical_acts,
+                                    x='avg_duration',
+                                    y='activity',
+                                    orientation='h',
+                                    title='Top 10 Slowest Activities',
+                                    color='frequency',
+                                    color_continuous_scale='Reds',
+                                    labels={
+                                        'avg_duration': 'Average Duration (hours)',
+                                        'activity': 'Activity',
+                                        'frequency': 'Frequency'
+                                    }
+                                )
+                                fig_critical.update_layout(height=400)
+                                st.plotly_chart(fig_critical, use_container_width=True)
+                                
+                                st.dataframe(
+                                    critical_acts.round({'avg_duration': 1}),
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            
+                            # Recommendations
+                            st.subheader("💡 Recommendations")
+                            
+                            if performance_data['sla_breach_rate'] > 30:
+                                st.error(f"⚠️ **High SLA Breach Rate ({performance_data['sla_breach_rate']:.1f}%)** - Urgent attention required!")
+                                st.markdown("""
+                                - Review and optimize slowest categories
+                                - Allocate more resources to high-impact categories
+                                - Consider process reengineering for critical activities
+                                """)
+                            
+                            if performance_data['rework_rate'] > 15:
+                                st.warning(f"⚠️ **High Rework Rate ({performance_data['rework_rate']:.1f}%)** - Quality issues detected")
+                                st.markdown("""
+                                - Investigate root causes of bug reopenings
+                                - Improve testing and validation processes
+                                - Consider code review improvements
+                                """)
+                            
+                            if performance_data['avg_reassignments'] > 5:
+                                st.info(f"ℹ️ **High Reassignment Rate ({performance_data['avg_reassignments']:.1f})** - Complex workflows")
+                                st.markdown("""
+                                - Consider workflow simplification
+                                - Review activity dependencies
+                                - Optimize handoff processes
+                                """)
+                            
+                            if performance_data['sla_breach_rate'] < 10 and performance_data['rework_rate'] < 5:
+                                st.success("✅ **Process is performing well!** Keep monitoring and maintain current practices.")
+                                
+                    except Exception as e:
+                        st.error(f"Error analyzing overall performance: {str(e)}")
+                        import traceback
+                        with st.expander("Show detailed error"):
+                            st.code(traceback.format_exc())
     
     with tab7:
         st.header("🎬 Process Animation - Token Replay")

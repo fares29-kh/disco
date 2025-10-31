@@ -289,3 +289,109 @@ def calculate_complexity_score(predicted_duration, historical_avg, historical_st
     
     return complexity_score, risk_level
 
+
+def calculate_process_deviation(df, case_id=None, category=None, priority=None):
+    """
+    Calculate process deviation indicator (complexity indicator).
+    Measures how much a case deviates from the standard process.
+    
+    Args:
+        df: Event log dataframe
+        case_id: Specific case to analyze (optional)
+        category: Category to analyze (optional)
+        priority: Priority to analyze (optional)
+        
+    Returns:
+        dict: Deviation metrics
+    """
+    if df.empty:
+        return {'deviation_score': 0, 'deviation_level': 'Normal', 'factors': []}
+    
+    # Get cases to analyze
+    if case_id:
+        cases_to_analyze = df[df['case_id'] == case_id]
+    elif category:
+        cases_to_analyze = df[df['category'] == category].copy()
+    elif priority:
+        cases_to_analyze = df[df['priority'] == priority].copy()
+    else:
+        cases_to_analyze = df.copy()
+    
+    if cases_to_analyze.empty:
+        return {'deviation_score': 0, 'deviation_level': 'Normal', 'factors': []}
+    
+    # Calculate standard process metrics
+    all_case_stats = df.groupby('case_id').agg({
+        'activity': 'count',
+        'timestamp': ['min', 'max']
+    }).reset_index()
+    all_case_stats.columns = ['case_id', 'num_activities', 'start_time', 'end_time']
+    all_case_stats['duration_hours'] = (
+        all_case_stats['end_time'] - all_case_stats['start_time']
+    ).dt.total_seconds() / 3600
+    
+    standard_avg_activities = all_case_stats['num_activities'].mean()
+    standard_avg_duration = all_case_stats['duration_hours'].mean()
+    
+    # Analyze target cases
+    target_stats = cases_to_analyze.groupby('case_id').agg({
+        'activity': 'count',
+        'timestamp': ['min', 'max']
+    }).reset_index()
+    target_stats.columns = ['case_id', 'num_activities', 'start_time', 'end_time']
+    target_stats['duration_hours'] = (
+        target_stats['end_time'] - target_stats['start_time']
+    ).dt.total_seconds() / 3600
+    
+    avg_activities = target_stats['num_activities'].mean()
+    avg_duration = target_stats['duration_hours'].mean()
+    
+    # Check for rework (reopened bugs)
+    reopened_cases = cases_to_analyze[
+        cases_to_analyze['activity'].str.lower().str.contains('reopen', na=False)
+    ]['case_id'].nunique()
+    total_cases = cases_to_analyze['case_id'].nunique()
+    rework_rate = (reopened_cases / total_cases * 100) if total_cases > 0 else 0
+    
+    # Calculate deviation factors
+    factors = []
+    deviation_score = 0
+    
+    # Activity count deviation
+    if standard_avg_activities > 0:
+        activity_deviation = abs(avg_activities - standard_avg_activities) / standard_avg_activities
+        if activity_deviation > 0.2:  # More than 20% deviation
+            factors.append(f"Activity count deviation: {activity_deviation*100:.1f}%")
+            deviation_score += min(30, activity_deviation * 100)
+    
+    # Duration deviation
+    if standard_avg_duration > 0:
+        duration_deviation = abs(avg_duration - standard_avg_duration) / standard_avg_duration
+        if duration_deviation > 0.2:  # More than 20% deviation
+            factors.append(f"Duration deviation: {duration_deviation*100:.1f}%")
+            deviation_score += min(40, duration_deviation * 100)
+    
+    # Rework rate
+    if rework_rate > 10:  # More than 10% rework
+        factors.append(f"High rework rate: {rework_rate:.1f}%")
+        deviation_score += min(30, rework_rate)
+    
+    # Determine deviation level
+    if deviation_score < 20:
+        deviation_level = 'Normal'
+    elif deviation_score < 50:
+        deviation_level = 'Moderate'
+    elif deviation_score < 80:
+        deviation_level = 'High'
+    else:
+        deviation_level = 'Critical'
+    
+    return {
+        'deviation_score': min(100, deviation_score),
+        'deviation_level': deviation_level,
+        'factors': factors,
+        'avg_activities': avg_activities,
+        'standard_avg_activities': standard_avg_activities,
+        'rework_rate': rework_rate
+    }
+
