@@ -8,6 +8,207 @@ from utils.feature_engineering import extract_features_from_log, calculate_proce
 from utils.ml_models import BugDurationPredictor
 
 
+def get_category_recommendations(category_name, metrics):
+    """
+    Get detailed recommendations for a specific bug category.
+    
+    Args:
+        category_name: Name of the bug category
+        metrics: Dictionary containing category metrics
+        
+    Returns:
+        dict: Recommendations with insights and actions
+    """
+    # Normalize category name for matching
+    cat_lower = category_name.lower()
+    
+    # Define category-specific recommendations
+    recommendations = {
+        'insights': [],
+        'actions': [],
+        'kpis': [],
+        'priority_level': 'Medium'
+    }
+    
+    # Functional Bugs
+    if any(keyword in cat_lower for keyword in ['functional', 'function', 'fonctionnel', 'feature']):
+        recommendations['insights'] = [
+            "Très fréquents et souvent critiques pour la fonctionnalité principale du logiciel",
+            "Souvent associés à de longs délais entre 'Assign' → 'Fix'",
+            f"Taux de dépassement SLA: {metrics.get('predicted_delay_risk', 0):.1f}%"
+        ]
+        recommendations['actions'] = [
+            "🧠 Mettre en place une détection automatique de régressions (tests unitaires automatisés)",
+            "🚀 Prioriser les cas similaires déjà résolus (similarity-based retrieval)",
+            "🕒 Définir un SLA strict (ex. < 48h) pour éviter accumulation",
+            "📊 Surveiller les transitions 'Fix → QA' pour éviter retards de validation"
+        ]
+        recommendations['kpis'] = [
+            "Temps moyen Assign → Fix",
+            "Taux de régression",
+            "Couverture de tests unitaires"
+        ]
+        recommendations['priority_level'] = 'High' if metrics.get('predicted_delay_risk', 0) > 50 else 'Medium'
+    
+    # Performance Bugs
+    elif any(keyword in cat_lower for keyword in ['performance', 'perf', 'slow', 'speed', 'latency', 'memory']):
+        recommendations['insights'] = [
+            "Moins fréquents mais temps de résolution très élevé",
+            "Corrélation forte avec retards 'Assign → Fix' et 'Fix → QA'",
+            f"Durée moyenne: {metrics.get('avg_duration', 0):.1f}h (vs moyenne globale)"
+        ]
+        recommendations['actions'] = [
+            "🔍 Surveiller les métriques de performance (CPU, mémoire, latence)",
+            "🧩 Appliquer du profiling automatique dès détection du bug",
+            "⚡ Prioriser selon impact (critical path ou composant clé)",
+            "🧠 Utiliser un modèle prédictif pour estimer le délai probable",
+            "📈 Mettre en place des benchmarks automatiques"
+        ]
+        recommendations['kpis'] = [
+            "Temps de résolution moyen",
+            "Impact sur performance système",
+            "Nombre de sessions affectées"
+        ]
+        recommendations['priority_level'] = 'Critical' if metrics.get('avg_duration', 0) > 48 else 'High'
+    
+    # Testing/QA Bugs
+    elif any(keyword in cat_lower for keyword in ['test', 'qa', 'quality', 'validation']):
+        recommendations['insights'] = [
+            "Fréquence moyenne, mais réouvertures fréquentes ('Reopen rate' élevé)",
+            "Souvent dus à des cas de test incomplets ou ambigus",
+            f"Score de déviation: {metrics.get('deviation_score', 0):.1f}/100"
+        ]
+        recommendations['actions'] = [
+            "🧱 Renforcer la couverture des tests automatisés",
+            "🔁 Mettre en place un contrôle qualité sur la rédaction des cas de test",
+            "🕵️‍♀️ Vérifier les incohérences entre versions testées et corrigées",
+            "📋 Documenter les scénarios de test manquants",
+            "🤖 Automatiser les tests de régression"
+        ]
+        recommendations['kpis'] = [
+            "Taux de réouverture",
+            "Couverture de tests",
+            "Temps moyen en QA"
+        ]
+        recommendations['priority_level'] = 'Medium'
+    
+    # GUI/UI Bugs
+    elif any(keyword in cat_lower for keyword in ['gui', 'ui', 'interface', 'visual', 'frontend', 'display']):
+        recommendations['insights'] = [
+            "Impact modéré mais haute fréquence en phase de test",
+            "Souvent rejetés plusieurs fois pour retouches mineures ('QA repetition count' élevé)",
+            f"Nombre d'instances: {metrics.get('instance_count', 0)}"
+        ]
+        recommendations['actions'] = [
+            "🎯 Grouper les bugs visuels par composant (bouton, formulaire, menu)",
+            "👀 Utiliser des outils d'automated UI testing (ex. Selenium, Cypress)",
+            "📅 Planifier des sprints UI courts dédiés",
+            "💬 Encourager les validations croisées entre devs et testeurs",
+            "📸 Automatiser les tests visuels (screenshot comparison)"
+        ]
+        recommendations['kpis'] = [
+            "Nombre de rejets QA",
+            "Temps moyen de correction",
+            "Taux de satisfaction utilisateur"
+        ]
+        recommendations['priority_level'] = 'Medium'
+    
+    # Backend Bugs
+    elif any(keyword in cat_lower for keyword in ['backend', 'api', 'server', 'database', 'db']):
+        recommendations['insights'] = [
+            "Impact critique sur la stabilité du système",
+            "Nécessite souvent une expertise technique avancée",
+            f"Temps de résolution prévu: {metrics.get('predicted_resolution_time', 0):.1f}h"
+        ]
+        recommendations['actions'] = [
+            "🔧 Assigner à des développeurs backend expérimentés",
+            "📊 Mettre en place un monitoring proactif des APIs",
+            "🗄️ Vérifier l'intégrité et performance de la base de données",
+            "🔍 Utiliser des outils de debugging avancés (profilers, logs structurés)",
+            "⚡ Mettre en cache les requêtes fréquentes si applicable"
+        ]
+        recommendations['kpis'] = [
+            "Temps de réponse API",
+            "Taux d'erreurs serveur",
+            "Disponibilité du service"
+        ]
+        recommendations['priority_level'] = 'High'
+    
+    # Security Bugs
+    elif any(keyword in cat_lower for keyword in ['security', 'sécurité', 'vulnerability', 'auth', 'authentication']):
+        recommendations['insights'] = [
+            "⚠️ PRIORITÉ MAXIMALE - Impact sur la sécurité du système",
+            "Nécessite une résolution immédiate et des tests approfondis",
+            "Peut nécessiter un patch urgent en production"
+        ]
+        recommendations['actions'] = [
+            "🚨 Traiter immédiatement - bloquer tout autre travail si critique",
+            "🔒 Audit de sécurité complet du composant affecté",
+            "🧪 Tests de pénétration avant déploiement",
+            "📢 Communication transparente avec les stakeholders",
+            "🔐 Révision du code par un expert sécurité",
+            "📝 Documentation complète de la faille et de la correction"
+        ]
+        recommendations['kpis'] = [
+            "Temps de réponse à l'incident",
+            "Score de sévérité CVE",
+            "Impact utilisateurs"
+        ]
+        recommendations['priority_level'] = 'Critical'
+    
+    # Integration Bugs
+    elif any(keyword in cat_lower for keyword in ['integration', 'intégration', 'connectivity', 'connection']):
+        recommendations['insights'] = [
+            "Affecte la communication entre systèmes/composants",
+            "Peut causer des effets en cascade sur d'autres services",
+            f"Déviation du processus standard: {metrics.get('deviation_score', 0):.1f}/100"
+        ]
+        recommendations['actions'] = [
+            "🔗 Vérifier tous les endpoints et contrats d'API",
+            "🧪 Tester les scénarios de failover et retry",
+            "📊 Mettre en place un monitoring des intégrations",
+            "🔄 Documenter les dépendances inter-systèmes",
+            "⚡ Implémenter des circuit breakers si applicable"
+        ]
+        recommendations['kpis'] = [
+            "Taux de succès des intégrations",
+            "Temps de détection des pannes",
+            "MTTR (Mean Time To Recovery)"
+        ]
+        recommendations['priority_level'] = 'High'
+    
+    # Default recommendations for unclassified categories
+    else:
+        recommendations['insights'] = [
+            f"Catégorie: {category_name}",
+            f"Durée moyenne de résolution: {metrics.get('avg_duration', 0):.1f}h",
+            f"Risque de retard: {metrics.get('predicted_delay_risk', 0):.1f}%",
+            f"Nombre d'instances: {metrics.get('instance_count', 0)}"
+        ]
+        recommendations['actions'] = [
+            "📊 Analyser les patterns de résolution historiques",
+            "🎯 Identifier les goulots d'étranglement spécifiques",
+            "👥 Assigner selon l'expertise requise",
+            "📈 Suivre l'évolution des métriques clés",
+            "🔄 Mettre en place un processus de revue régulier"
+        ]
+        recommendations['kpis'] = [
+            "Temps de résolution",
+            "Taux de complétion",
+            "Satisfaction client"
+        ]
+        
+        # Determine priority based on metrics
+        if metrics.get('priority_score', 0) >= 70:
+            recommendations['priority_level'] = 'Critical'
+        elif metrics.get('priority_score', 0) >= 40:
+            recommendations['priority_level'] = 'High'
+        else:
+            recommendations['priority_level'] = 'Medium'
+    
+    return recommendations
+
+
 def prioritize_categories(df, sla_threshold=24.0, predictor=None):
     """
     Prioritize bug categories based on AI analysis.

@@ -397,7 +397,7 @@ else:
     
     with tab1:
         st.header("Process Map Visualization")
-        st.markdown("Interactive process flow diagram with color-coded performance indicators")
+        st.markdown("**Interactive process flow diagram** - 🟢 Green boxes show START nodes (entry points), 🟣 Purple boxes show END nodes (exit points)")
         
         # Option to enable animation
         col_anim1, col_anim2 = st.columns([1, 4])
@@ -430,11 +430,21 @@ else:
                 st.caption(f"Durée > {sla_threshold:.1f}h")
             
             st.markdown("#### 🔵 Nœuds (Activités/Tâches)")
-            col4, col5 = st.columns(2)
+            
+            # Highlight start/end nodes prominently
+            st.info("💡 **Points Clés**: 🟢 **VERT = DÉPART** (première activité) | 🟣 **VIOLET = FIN** (dernière activité)")
+            
+            col4, col5, col6, col7 = st.columns(4)
             with col4:
+                st.markdown("🟢 **Vert + 🚀**: Nœud de DÉPART")
+                st.caption("Point d'entrée du processus")
+            with col5:
+                st.markdown("🟣 **Violet + 🏁**: Nœud de FIN")
+                st.caption("Point de sortie du processus")
+            with col6:
                 st.markdown("🔵 **Bleu**: Durée normale")
                 st.caption("Temps moyen ≤ 24h")
-            with col5:
+            with col7:
                 st.markdown("🔴 **Rouge**: Durée critique")
                 st.caption("Temps moyen > 24h")
             
@@ -445,10 +455,22 @@ else:
                 st.markdown("""
                 **Nœuds (rectangles)** :
                 - Représentent les activités/tâches du processus
-                - **Couleur** :
-                  - 🔵 **Bleu** : Temps moyen ≤ 24h (normal)
-                  - 🔴 **Rouge** : Temps moyen > 24h (critique)
-                - **Taille** : Proportionnelle au volume d'activité
+                - **Identification des Points Clés** :
+                  - 🟢 **VERT avec badge "🚀 START"** : Nœud de DÉPART
+                    * Point d'entrée du processus
+                    * Première activité effectuée
+                    * Identifiable par la couleur verte distinctive
+                  - 🟣 **VIOLET avec badge "🏁 END"** : Nœud de FIN
+                    * Point de sortie du processus
+                    * Dernière activité effectuée
+                    * Identifiable par la couleur violette distinctive
+                - **Autres Couleurs** :
+                  - 🔵 **Bleu** : Activité intermédiaire avec temps moyen ≤ 24h (normal)
+                  - 🔴 **Rouge** : Activité problématique avec temps moyen > 24h (critique)
+                - **Caractéristiques visuelles** :
+                  - Les nœuds START/END ont une bordure **plus épaisse** (5px vs 3px)
+                  - Les nœuds START/END ont des badges supplémentaires au-dessus
+                  - Police plus grande pour START/END (12pt vs 11pt)
                 - **Label en dessous** : Durée moyenne de traitement
                 
                 **Arcs (flèches)** :
@@ -659,10 +681,9 @@ else:
         )
         
         # Sub-tabs for different AI features
-        ai_tab1, ai_tab2, ai_tab3, ai_tab4, ai_tab5 = st.tabs([
+        ai_tab1, ai_tab2, ai_tab3, ai_tab4 = st.tabs([
             "📊 Model Training & Evaluation",
             "🔮 Predict New Bug Instance",
-            "📈 Batch Predictions",
             "🏆 Category Prioritization",
             "📉 Overall Process Performance"
         ])
@@ -1095,20 +1116,49 @@ else:
                                 st.code(traceback.format_exc())
         
         with ai_tab3:
-            st.subheader("📈 Batch Predictions")
-            st.info("🚧 Feature coming soon: Upload a CSV of new bugs to get predictions for all")
-            
-            st.markdown("""
-            **Planned Features:**
-            - Upload CSV with multiple bugs
-            - Get predictions for all bugs at once
-            - Export results with risk classifications
-            - Prioritization recommendations
-            """)
-        
-        with ai_tab4:
             st.subheader("🏆 AI-Based Bug Category Prioritization")
             st.markdown("Prioritize bug categories based on their impact on process efficiency using AI analysis.")
+            
+            # Help section
+            with st.expander("ℹ️ About Category Recommendations"):
+                st.markdown("""
+                ### 🎯 How it works
+                
+                Our AI system analyzes your bug data and provides **category-specific recommendations** based on:
+                - Historical resolution times
+                - SLA breach rates
+                - Process deviation patterns
+                - Instance frequency
+                
+                ### 📊 Priority Levels
+                
+                Categories are classified into 4 priority levels:
+                - 🔴 **Critical**: Immediate action required (Security, High SLA breach)
+                - 🟠 **High**: Should be addressed soon (Performance, Backend issues)
+                - 🟡 **Medium**: Normal priority (UI, Testing bugs)
+                - 🟢 **Low**: Can be deferred (Minor issues)
+                
+                ### 💡 Recommendations Include
+                
+                For each category, you'll get:
+                1. **Insights**: Key observations about the category's behavior
+                2. **Actions**: Specific steps to improve resolution efficiency
+                3. **KPIs**: Metrics to monitor for continuous improvement
+                
+                ### 🏷️ Supported Categories
+                
+                The system provides tailored recommendations for:
+                - **Functional Bugs**: Feature and functionality issues
+                - **Performance Bugs**: Speed, latency, memory issues
+                - **Testing/QA Bugs**: Quality assurance and validation
+                - **GUI/UI Bugs**: Visual and interface issues
+                - **Backend Bugs**: Server, API, database issues
+                - **Security Bugs**: Authentication, vulnerabilities
+                - **Integration Bugs**: Inter-system communication
+                - **Generic**: Adaptive recommendations for other categories
+                """)
+            
+            st.divider()
             
             if 'category' not in df_filtered.columns:
                 st.warning("⚠️ No 'category' column found in the data. Category prioritization requires category information.")
@@ -1178,13 +1228,83 @@ else:
                                 fig_priority.update_layout(height=400)
                                 st.plotly_chart(fig_priority, use_container_width=True)
                                 
-                                # Detailed metrics per category
-                                st.subheader("📋 Detailed Metrics")
+                                # Summary of priority levels
+                                st.markdown("---")
+                                st.subheader("🎯 Priority Level Summary")
+                                
+                                from utils.category_prioritization import get_category_recommendations
+                                
+                                # Count categories by priority level
+                                priority_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
+                                filtered_priority_df_temp = priority_df[priority_df['category'] != 'All Bugs'].copy()
+                                
+                                for idx, row in filtered_priority_df_temp.iterrows():
+                                    metrics = {
+                                        'predicted_resolution_time': row['predicted_resolution_time'],
+                                        'predicted_delay_risk': row['predicted_delay_risk'],
+                                        'avg_duration': row['avg_duration'],
+                                        'instance_count': row['instance_count'],
+                                        'deviation_score': row['deviation_score'],
+                                        'priority_score': row['priority_score']
+                                    }
+                                    recs = get_category_recommendations(row['category'], metrics)
+                                    priority_counts[recs['priority_level']] += 1
+                                
+                                summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+                                with summary_col1:
+                                    st.metric("🔴 Critical", priority_counts['Critical'], 
+                                             help="Requires immediate attention")
+                                with summary_col2:
+                                    st.metric("🟠 High", priority_counts['High'],
+                                             help="Should be handled soon")
+                                with summary_col3:
+                                    st.metric("🟡 Medium", priority_counts['Medium'],
+                                             help="Normal priority")
+                                with summary_col4:
+                                    st.metric("🟢 Low", priority_counts['Low'],
+                                             help="Can be deferred")
+                                
+                                if priority_counts['Critical'] > 0:
+                                    st.error(f"⚠️ **{priority_counts['Critical']} Critical categories** require immediate attention!")
+                                elif priority_counts['High'] > 0:
+                                    st.warning(f"⚡ **{priority_counts['High']} High priority categories** should be addressed soon")
+                                else:
+                                    st.success("✅ No critical issues detected - All categories under control")
+                                
+                                st.markdown("---")
+                                
+                                # Detailed metrics per category with recommendations
+                                st.subheader("📋 Detailed Analysis & Recommendations")
+                                
+                                # Import recommendation function
+                                from utils.category_prioritization import get_category_recommendations
                                 
                                 # Filter out "All Bugs" for detailed metrics
                                 filtered_priority_df = priority_df[priority_df['category'] != 'All Bugs'].copy()
                                 for idx, row in filtered_priority_df.iterrows():
-                                    with st.expander(f"🏷️ {row['category']} - Score: {row['priority_score']:.1f}"):
+                                    # Get category-specific recommendations
+                                    metrics = {
+                                        'predicted_resolution_time': row['predicted_resolution_time'],
+                                        'predicted_delay_risk': row['predicted_delay_risk'],
+                                        'avg_duration': row['avg_duration'],
+                                        'instance_count': row['instance_count'],
+                                        'deviation_score': row['deviation_score'],
+                                        'priority_score': row['priority_score']
+                                    }
+                                    recommendations = get_category_recommendations(row['category'], metrics)
+                                    
+                                    # Priority level indicator
+                                    priority_colors = {
+                                        'Critical': '🔴',
+                                        'High': '🟠',
+                                        'Medium': '🟡',
+                                        'Low': '🟢'
+                                    }
+                                    priority_icon = priority_colors.get(recommendations['priority_level'], '⚪')
+                                    
+                                    with st.expander(f"{priority_icon} **{row['category']}** - Priority Score: {row['priority_score']:.1f} ({recommendations['priority_level']})"):
+                                        # Metrics section
+                                        st.markdown("### 📊 Key Metrics")
                                         col1, col2, col3 = st.columns(3)
                                         
                                         with col1:
@@ -1199,12 +1319,34 @@ else:
                                             st.metric("Deviation Score", f"{row['deviation_score']:.1f}/100")
                                             st.metric("Suggested Action", row['suggested_action'])
                                         
-                                        st.info(f"💡 **Recommendation**: {row['suggested_action']}")
+                                        st.divider()
                                         
+                                        # Insights section
+                                        st.markdown("### 💡 Insights")
+                                        for insight in recommendations['insights']:
+                                            st.info(f"ℹ️ {insight}")
+                                        
+                                        # Warnings
                                         if row['predicted_delay_risk'] > 50:
-                                            st.warning("⚠️ High delay risk - many instances exceed SLA threshold")
+                                            st.error("🚨 **High delay risk** - Many instances exceed SLA threshold. Immediate action required!")
                                         if row['deviation_score'] > 50:
-                                            st.warning("⚠️ High process deviation - cases deviate significantly from standard process")
+                                            st.warning("⚠️ **High process deviation** - Cases deviate significantly from standard process")
+                                        
+                                        st.divider()
+                                        
+                                        # Recommendations section
+                                        st.markdown("### 🎯 Recommended Actions")
+                                        for action in recommendations['actions']:
+                                            st.markdown(f"- {action}")
+                                        
+                                        st.divider()
+                                        
+                                        # KPIs to monitor
+                                        st.markdown("### 📈 Key Performance Indicators to Monitor")
+                                        kpi_cols = st.columns(len(recommendations['kpis']))
+                                        for i, kpi in enumerate(recommendations['kpis']):
+                                            with kpi_cols[i]:
+                                                st.markdown(f"**{kpi}**")
                             else:
                                 st.warning("No category data available for prioritization")
                                 
@@ -1214,7 +1356,7 @@ else:
                             with st.expander("Show detailed error"):
                                 st.code(traceback.format_exc())
         
-        with ai_tab5:
+        with ai_tab4:
             st.subheader("📉 Predictive Analysis for Overall Process Performance")
             st.markdown("Analyze the overall impact of bug categories on process performance and identify critical activities.")
             

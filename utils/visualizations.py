@@ -134,6 +134,10 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
     # Create figure with edges only first
     fig = go.Figure(data=edge_traces)
     
+    # Get start and end activities
+    start_activities = dfg_data.get('start_activities', {})
+    end_activities = dfg_data.get('end_activities', {})
+    
     # Add rectangular shapes for nodes using annotations
     for node in G.nodes():
         x, y = pos[node]
@@ -155,36 +159,64 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
         out_freq = sum([e['frequency'] for e in edges if e['from'] == node])
         total_freq = in_freq + out_freq
         
-        # Node color: RED if > 24h, BLUE otherwise
-        if node_color_key == 'red':
+        # Check if this is a start or end node
+        is_start = node in start_activities
+        is_end = node in end_activities
+        
+        # Node color: Special colors for start/end, otherwise RED if > 24h, BLUE otherwise
+        if is_start:
+            color_hex = '#27AE60'  # Green for start
+            border_color = '#1E8449'
+            node_label = f"<b>▶️ START<br>{node}</b>"
+            font_size = 12
+            borderwidth = 5
+            borderpad = 12
+        elif is_end:
+            color_hex = '#8E44AD'  # Purple for end
+            border_color = '#6C3483'
+            node_label = f"<b>{node}<br>⏹️ END</b>"
+            font_size = 12
+            borderwidth = 5
+            borderpad = 12
+        elif node_color_key == 'red':
             color_hex = '#E74C3C'  # Rouge
             border_color = '#C0392B'
+            node_label = f"<b>{node}</b>"
+            font_size = 11
+            borderwidth = 3
+            borderpad = 8
         else:
             color_hex = '#3498DB'  # Bleu
             border_color = '#2980B9'
+            node_label = f"<b>{node}</b>"
+            font_size = 11
+            borderwidth = 3
+            borderpad = 8
         
         # Create rectangular annotation for the node
         fig.add_annotation(
             x=x,
             y=y,
-            text=f"<b>{node}</b>",
+            text=node_label,
             showarrow=False,
             font=dict(
-                size=11,
+                size=font_size,
                 color='white',
                 family='Arial Black'
             ),
             bgcolor=color_hex,
             bordercolor=border_color,
-            borderwidth=3,
-            borderpad=8,
-            opacity=0.95,
+            borderwidth=borderwidth,
+            borderpad=borderpad,
+            opacity=0.98 if (is_start or is_end) else 0.95,
             hovertext=(
                 f"<b>{node}</b><br>"
-                f"Avg Duration: <b>{duration_text}</b><br>"
-                f"Status: {'⚠️ CRITICAL' if node_color_key == 'red' else '✅ Normal'}<br>"
-                f"In: {in_freq} | Out: {out_freq}<br>"
-                f"Total: {total_freq}"
+                + (f"🚀 <b>START NODE</b> (Entry Point)<br>" if is_start else "")
+                + (f"🏁 <b>END NODE</b> (Exit Point)<br>" if is_end else "")
+                + f"Avg Duration: <b>{duration_text}</b><br>"
+                + f"Status: {'⚠️ CRITICAL' if node_color_key == 'red' else '✅ Normal'}<br>"
+                + f"In: {in_freq} | Out: {out_freq}<br>"
+                + f"Total: {total_freq}"
             ),
             hoverlabel=dict(
                 bgcolor='white',
@@ -192,6 +224,42 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
                 font_color='black'
             )
         )
+        
+        # Add special badge/label above start and end nodes
+        if is_start:
+            fig.add_annotation(
+                x=x,
+                y=y + 0.15,  # Above the node
+                text="<b>🚀 START</b>",
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color='white',
+                    family='Arial Black'
+                ),
+                bgcolor='#1E8449',
+                bordercolor='#27AE60',
+                borderwidth=2,
+                borderpad=5,
+                opacity=1.0
+            )
+        elif is_end:
+            fig.add_annotation(
+                x=x,
+                y=y + 0.15,  # Above the node
+                text="<b>🏁 END</b>",
+                showarrow=False,
+                font=dict(
+                    size=10,
+                    color='white',
+                    family='Arial Black'
+                ),
+                bgcolor='#6C3483',
+                bordercolor='#8E44AD',
+                borderwidth=2,
+                borderpad=5,
+                opacity=1.0
+            )
         
         # Add duration annotation below the rectangle
         if duration_hours > 0:
@@ -351,7 +419,7 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
         # Update layout with animation controls
         fig.update_layout(
             title={
-                'text': "Process Map - Workflow with Animated Tokens",
+                'text': "Process Map - Workflow with Duration (🟢=Start, 🟣=End)",
                 'x': 0.5,
                 'xanchor': 'center',
                 'font': {'size': 18, 'color': '#2C3E50'}
@@ -429,7 +497,7 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
         # No animation - standard layout
         fig.update_layout(
             title={
-                'text': "Process Map - Workflow with Duration",
+                'text': "Process Map - Workflow with Duration (🟢=Start, 🟣=End)",
                 'x': 0.5,
                 'xanchor': 'center',
                 'font': {'size': 18, 'color': '#2C3E50'}
@@ -444,6 +512,37 @@ def plot_process_map(dfg_data, width=1200, height=600, animated=False):
             width=width,
             height=height
         )
+    
+    # Add legend box for start/end nodes
+    # Get the axis ranges to position the legend
+    all_x = [pos[node][0] for node in G.nodes()]
+    all_y = [pos[node][1] for node in G.nodes()]
+    x_min, x_max = min(all_x), max(all_x)
+    y_min, y_max = min(all_y), max(all_y)
+    
+    # Position legend in top-left corner
+    legend_x = x_min - 0.3
+    legend_y = y_max + 0.3
+    
+    # Add legend background
+    fig.add_annotation(
+        x=legend_x,
+        y=legend_y,
+        text=(
+            "<b>Legend:</b><br>"
+            "🟢 <b>START</b> = Entry Point<br>"
+            "🟣 <b>END</b> = Exit Point"
+        ),
+        showarrow=False,
+        font=dict(size=10, color='#2C3E50', family='Arial'),
+        bgcolor='rgba(255, 255, 255, 0.95)',
+        bordercolor='#2C3E50',
+        borderwidth=2,
+        borderpad=8,
+        align='left',
+        xanchor='left',
+        yanchor='top'
+    )
     
     return fig
 
