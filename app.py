@@ -413,6 +413,19 @@ else:
                 fig_process = plot_process_map(dfg_data, animated=enable_animation)
                 st.plotly_chart(fig_process, use_container_width=True)
             
+            # Show detected start/end nodes
+            start_nodes = list(dfg_data.get('start_activities', {}).keys())
+            end_nodes = list(dfg_data.get('end_activities', {}).keys())
+            
+            if start_nodes or end_nodes:
+                info_col1, info_col2 = st.columns(2)
+                with info_col1:
+                    if start_nodes:
+                        st.success(f"🟢 **Nœuds de DÉPART détectés**: {', '.join(start_nodes)}")
+                with info_col2:
+                    if end_nodes:
+                        st.success(f"🟣 **Nœuds de FIN détectés**: {', '.join(end_nodes)}")
+            
             # Legend with better explanations
             st.markdown("---")
             st.markdown("### 📊 Légende")
@@ -432,21 +445,22 @@ else:
             st.markdown("#### 🔵 Nœuds (Activités/Tâches)")
             
             # Highlight start/end nodes prominently
-            st.info("💡 **Points Clés**: 🟢 **VERT = DÉPART** (première activité) | 🟣 **VIOLET = FIN** (dernière activité)")
+            st.info("💡 **Points Clés**: 🟢 **VERT** = Report the bug | 🟣 **VIOLET** = Close Bug | 🔵/🔴 **Autres nœuds** = Couleur selon durée")
+            st.caption("ℹ️ Les nœuds 'Report the bug' et 'Close Bug' sont automatiquement marqués comme points d'entrée/sortie")
             
             col4, col5, col6, col7 = st.columns(4)
             with col4:
-                st.markdown("🟢 **Vert + 🚀**: Nœud de DÉPART")
-                st.caption("Point d'entrée du processus")
+                st.markdown("🟢 **Vert + 🚀**: Report the bug")
+                st.caption("Nœud de départ fixe")
             with col5:
-                st.markdown("🟣 **Violet + 🏁**: Nœud de FIN")
-                st.caption("Point de sortie du processus")
+                st.markdown("🟣 **Violet + 🏁**: Close Bug")
+                st.caption("Nœud de fin fixe")
             with col6:
-                st.markdown("🔵 **Bleu**: Durée normale")
-                st.caption("Temps moyen ≤ 24h")
+                st.markdown("🔵 **Bleu**: Autres nœuds (≤24h)")
+                st.caption("Durée normale")
             with col7:
-                st.markdown("🔴 **Rouge**: Durée critique")
-                st.caption("Temps moyen > 24h")
+                st.markdown("🔴 **Rouge**: Autres nœuds (>24h)")
+                st.caption("Durée critique")
             
             st.info(f"ℹ️ **Seuil SLA pour arcs**: {sla_threshold}h (ajustable) | **Seuil pour nœuds**: 24h (fixe)")
             
@@ -455,23 +469,31 @@ else:
                 st.markdown("""
                 **Nœuds (rectangles)** :
                 - Représentent les activités/tâches du processus
-                - **Identification des Points Clés** :
-                  - 🟢 **VERT avec badge "🚀 START"** : Nœud de DÉPART
-                    * Point d'entrée du processus
-                    * Première activité effectuée
-                    * Identifiable par la couleur verte distinctive
-                  - 🟣 **VIOLET avec badge "🏁 END"** : Nœud de FIN
-                    * Point de sortie du processus
-                    * Dernière activité effectuée
-                    * Identifiable par la couleur violette distinctive
-                - **Autres Couleurs** :
-                  - 🔵 **Bleu** : Activité intermédiaire avec temps moyen ≤ 24h (normal)
-                  - 🔴 **Rouge** : Activité problématique avec temps moyen > 24h (critique)
-                - **Caractéristiques visuelles** :
-                  - Les nœuds START/END ont une bordure **plus épaisse** (5px vs 3px)
-                  - Les nœuds START/END ont des badges supplémentaires au-dessus
-                  - Police plus grande pour START/END (12pt vs 11pt)
+                - **Nœuds Spéciaux (Points d'entrée/sortie)** :
+                  - 🟢 **VERT avec badge "🚀 START"** : **"Report the bug"**
+                    * Point d'entrée du processus (fixe)
+                    * Toujours en vert, peu importe la durée
+                    * Badge "🚀 START" au-dessus du nœud
+                    * Bordure verte épaisse (5px)
+                    * Police plus grande (12pt)
+                  - 🟣 **VIOLET avec badge "🏁 END"** : **"Close Bug"**
+                    * Point de sortie du processus (fixe)
+                    * Toujours en violet, peu importe la durée
+                    * Badge "🏁 END" au-dessus du nœud
+                    * Bordure violette épaisse (5px)
+                    * Police plus grande (12pt)
+                - **Autres Nœuds (selon durée)** :
+                  - 🔵 **Bleu** : Activité avec temps moyen ≤ 24h (normal)
+                  - 🔴 **Rouge** : Activité avec temps moyen > 24h (critique)
+                  - Bordure normale (3px)
+                  - Police normale (11pt)
                 - **Label en dessous** : Durée moyenne de traitement
+                
+                **🎯 Configuration** :
+                - "Report the bug" = TOUJOURS VERT (point de départ)
+                - "Close Bug" = TOUJOURS VIOLET (point de fin)
+                - Toutes les autres activités = Bleu ou Rouge selon leur durée moyenne
+                - Les nœuds détectés sont affichés au-dessus de la carte
                 
                 **Arcs (flèches)** :
                 - Représentent les transitions entre activités

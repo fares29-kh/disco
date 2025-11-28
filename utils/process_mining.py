@@ -145,6 +145,28 @@ def compute_dfg_with_colors(df, sla_threshold):
                 'status': 'unknown'
             }
     
+    # Force specific activities as start/end nodes
+    # Override start and end activities to only show specific nodes
+    forced_start_activities = {}
+    forced_end_activities = {}
+    
+    for activity in all_activities:
+        activity_lower = activity.lower().strip()
+        
+        # Only "Report the bug" should be green (start)
+        # Must start with "report" to avoid matching "validate bug report"
+        if activity_lower.startswith('report') and 'bug' in activity_lower:
+            forced_start_activities[activity] = start_act.get(activity, 1)
+        
+        # Only "Close Bug" should be violet (end)
+        # Must start with "close" to be precise
+        if activity_lower.startswith('close') and 'bug' in activity_lower:
+            forced_end_activities[activity] = end_act.get(activity, 1)
+    
+    # Replace the original start/end activities with forced ones
+    start_act = forced_start_activities
+    end_act = forced_end_activities
+    
     return {
         'edges': edges,
         'start_activities': start_act,
